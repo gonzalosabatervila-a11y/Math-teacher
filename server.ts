@@ -3,18 +3,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createApp } from './server/app';
+import { loadConfig } from './server/config';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const app = createApp(
-  process.env.NODE_ENV === 'test'
-    ? { generate: async () => '' }
-    : { apiKey: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL }
-);
-const PORT = Number(process.env.PORT) || 3000;
+const config = loadConfig(process.env);
+export const app = createApp(config.nodeEnv === 'test' ? { generate: async () => '' } : { apiKey: config.apiKey, model: config.model });
+const PORT = config.port;
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
