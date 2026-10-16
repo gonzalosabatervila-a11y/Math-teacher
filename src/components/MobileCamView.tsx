@@ -227,7 +227,7 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCr
       {/* Main Viewfinder */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
         {errorMsg && (
-          <div className="absolute inset-4 z-30 flex flex-col items-center justify-center text-center p-6 bg-stone-900/95 rounded-2xl border border-red-800/80 space-y-3">
+          <div role="alert" className="absolute inset-4 z-30 flex flex-col items-center justify-center text-center p-6 bg-stone-900/95 rounded-2xl border border-red-800/80 space-y-3">
             <AlertCircle className="w-10 h-10 text-red-400" />
             <p className="text-xs text-red-200">{errorMsg}</p>
             <button

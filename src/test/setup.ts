@@ -92,3 +92,8 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
   value: vi.fn(),
 });
+
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: vi.fn(() => null),
+});

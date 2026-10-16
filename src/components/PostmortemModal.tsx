@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ErrorType, PostmortemData } from '../types/tutor';
 import { MathView } from './MathView';
+import { Dialog } from './Dialog';
 
 interface PostmortemModalProps {
   isOpen: boolean;
@@ -122,8 +123,7 @@ Próxima repetición espaciada: En 48 horas.`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-stone-100 max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} title="Postmortem y resumen de estado" onClose={onClose} className="bg-stone-900 border border-stone-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-stone-100 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-stone-800 pb-3">
           <div className="flex items-center space-x-2">
@@ -140,6 +140,8 @@ Próxima repetición espaciada: En 48 horas.`;
             </div>
           </div>
           <button
+            type="button"
+            aria-label="Cerrar postmortem"
             onClick={onClose}
             className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800"
           >
@@ -188,8 +190,9 @@ Próxima repetición espaciada: En 48 horas.`;
         {/* Descripción del Error y Regla Corregida */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="space-y-1">
-            <label className="font-semibold text-stone-300">¿Qué falló exactamente en el papel?</label>
+            <label htmlFor="postmortem-description" className="font-semibold text-stone-300">¿Qué falló exactamente en el papel?</label>
             <textarea
+              id="postmortem-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ej: Al cancelar el factor en el límite, no se especificó que x != 2..."
@@ -199,11 +202,12 @@ Próxima repetición espaciada: En 48 horas.`;
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-amber-400 flex items-center gap-1">
+            <label htmlFor="postmortem-rule" className="font-semibold text-amber-400 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Regla Corregida Formulada</span>
             </label>
             <textarea
+              id="postmortem-rule"
               value={correctedRule}
               onChange={(e) => setCorrectedRule(e.target.value)}
               placeholder="Regla: Siempre que factorice en cociente de límites, registrar la condición de indeterminación antes de simplificar."
@@ -215,11 +219,12 @@ Próxima repetición espaciada: En 48 horas.`;
 
         {/* Variante 48h */}
         <div className="space-y-1 text-xs">
-          <label className="font-semibold text-stone-300 flex items-center gap-1.5">
+          <label htmlFor="postmortem-variant" className="font-semibold text-stone-300 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-amber-500" />
             <span>Problema Variante para dentro de 48 Horas (Repetición Espaciada)</span>
           </label>
           <input
+            id="postmortem-variant"
             type="text"
             value={variantProblem}
             onChange={(e) => setVariantProblem(e.target.value)}
@@ -231,8 +236,9 @@ Próxima repetición espaciada: En 48 horas.`;
         {/* Conceptos Dominados / Abiertos */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="space-y-1">
-            <label className="font-semibold text-emerald-400">Conceptos Dominados Hoy</label>
+            <label htmlFor="postmortem-mastered" className="font-semibold text-emerald-400">Conceptos Dominados Hoy</label>
             <input
+              id="postmortem-mastered"
               type="text"
               value={masteredInput}
               onChange={(e) => setMasteredInput(e.target.value)}
@@ -242,8 +248,9 @@ Próxima repetición espaciada: En 48 horas.`;
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-amber-300">Conceptos que Quedan Abiertos</label>
+            <label htmlFor="postmortem-open" className="font-semibold text-amber-300">Conceptos que Quedan Abiertos</label>
             <input
+              id="postmortem-open"
               type="text"
               value={openConceptsInput}
               onChange={(e) => setOpenConceptsInput(e.target.value)}
@@ -294,7 +301,6 @@ Próxima repetición espaciada: En 48 horas.`;
             Guardar en Registro
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 };

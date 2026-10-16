@@ -279,7 +279,7 @@ export const ClassroomFeed: React.FC<ClassroomFeedProps> = ({
 
         {/* Loading indicator */}
         {isLoading && (
-          <div className="flex items-center gap-2 text-stone-400 text-xs italic p-2 bg-stone-900/60 rounded-lg max-w-xs border border-stone-800">
+          <div role="status" aria-live="polite" className="flex items-center gap-2 text-stone-400 text-xs italic p-2 bg-stone-900/60 rounded-lg max-w-xs border border-stone-800">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
             <span>El profesor está observando tu papel y pensando la pregunta...</span>
           </div>
@@ -333,7 +333,7 @@ export const ClassroomFeed: React.FC<ClassroomFeedProps> = ({
       {/* Input bar */}
       <div className="p-2.5 bg-stone-950 border-t border-stone-800">
         {speechError && (
-          <div className="text-[11px] text-red-400 mb-1 flex items-center gap-1">
+          <div role="alert" className="text-[11px] text-red-400 mb-1 flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
             <span>{speechError}</span>
           </div>

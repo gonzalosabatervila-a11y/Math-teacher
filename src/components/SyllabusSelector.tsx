@@ -55,6 +55,9 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
             {[1, 2, 3].map((num) => (
               <button
                 key={num}
+                type="button"
+                aria-pressed={currentSession === num}
+                aria-label={`Seleccionar sesión ${num}`}
                 onClick={() => onSelectSession(num)}
                 className={`px-2 py-0.5 rounded ${
                   currentSession === num
@@ -69,6 +72,9 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
           </div>
 
           <button
+            type="button"
+            aria-expanded={isOpen}
+            aria-controls="syllabus-weeks"
             onClick={onToggleOpen}
             className="px-2.5 py-1 text-xs bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg border border-stone-700 flex items-center gap-1"
           >
@@ -80,7 +86,7 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
 
       {/* Accordion / Expanded 13-Week Grid */}
       {isOpen && (
-        <div className="p-3 bg-stone-950/90 max-h-96 overflow-y-auto space-y-2 border-b border-stone-800 text-xs">
+        <div id="syllabus-weeks" className="p-3 bg-stone-950/90 max-h-96 overflow-y-auto space-y-2 border-b border-stone-800 text-xs">
           <div className="text-stone-400 text-[11px] mb-2 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>
@@ -92,10 +98,12 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
             {SYLLABUS.map((item) => {
               const isSelected = item.week === currentWeek;
               return (
-                <div
+                <button
+                  type="button"
                   key={item.week}
                   onClick={() => onSelectWeek(item.week)}
-                  className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
+                  aria-pressed={isSelected}
+                  className={`w-full p-2.5 rounded-lg border cursor-pointer text-left transition-all ${
                     isSelected
                       ? 'bg-amber-950/30 border-amber-500/80 ring-1 ring-amber-500/30'
                       : 'bg-stone-900/60 border-stone-800 hover:border-stone-700 hover:bg-stone-900'
@@ -123,7 +131,7 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
                     <TrendingUp className="w-3 h-3 text-amber-500 flex-shrink-0" />
                     <span className="truncate">{item.financialTransfer}</span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

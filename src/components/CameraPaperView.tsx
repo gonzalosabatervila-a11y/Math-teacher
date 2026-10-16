@@ -271,6 +271,8 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
         <div className="flex items-center space-x-2">
           {sourceType === 'mobile' && (
             <div
+              role="status"
+              aria-live="polite"
               className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-medium ${
                 mobileConnected
                   ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-300'
@@ -345,7 +347,12 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
                 {/* QR Code */}
                 <div className="bg-white p-3 rounded-xl inline-block shadow-lg mx-auto border-4 border-stone-800">
-                  <QRCodeSVG value={mobileUrl || window.location.origin} size={160} level="M" />
+                  <QRCodeSVG
+                    value={mobileUrl || window.location.origin}
+                    size={160}
+                    level="M"
+                    title="Código QR para conectar la cámara del móvil"
+                  />
                 </div>
 
                 <div className="space-y-2">
