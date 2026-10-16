@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Clock,
@@ -27,6 +27,8 @@ import { SyllabusSelector } from './components/SyllabusSelector';
 import { PostmortemModal } from './components/PostmortemModal';
 import { MobileCamView } from './components/MobileCamView';
 import { speakInSpanish, stopSpeaking, SpeechSettings } from './utils/speech';
+import { loadTutorState, saveTutorState } from './utils/persistence';
+import { useTutorSession } from './hooks/useTutorSession';
 
 const INITIAL_TEACHER_PROMPT =
   '¡Hola! Empecemos nuestra sesión de hoy. ¿En qué semana y sesión estás y qué fallaste la última vez que practicaste?';
@@ -45,36 +47,9 @@ export default function App() {
     return <MobileCamView sessionId={mobileCamSession} writeCredential={mobileCamCredential ?? ''} />;
   }
 
-  const [currentWeek, setCurrentWeek] = useState<number>(() => {
-    const saved = localStorage.getItem('math_tutor_week');
-    return saved !== null ? Number(saved) : 1;
-  });
-
-  const [currentSession, setCurrentSession] = useState<number>(() => {
-    const saved = localStorage.getItem('math_tutor_session_num');
-    return saved !== null ? Number(saved) : 1;
-  });
-
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem('math_tutor_messages');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.warn('Failed parsing saved messages', e);
-      }
-    }
-    return [
-      {
-        id: 'initial-teacher-msg',
-        role: 'assistant',
-        content: INITIAL_TEACHER_PROMPT,
-        timestamp: Date.now(),
-      },
-    ];
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [initialState] = useState(() => loadTutorState(localStorage));
+  const [currentWeek, setCurrentWeek] = useState(initialState.week);
+  const [currentSession, setCurrentSession] = useState(initialState.session);
   const [currentPaperSnapshot, setCurrentPaperSnapshot] = useState<string | null>(null);
 
   // 60-minute Session timer
@@ -98,18 +73,32 @@ export default function App() {
     autoSpeak: true,
   });
 
-  // Save changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('math_tutor_week', currentWeek.toString());
-  }, [currentWeek]);
+  const activeTopic = SYLLABUS.find((item) => item.week === currentWeek)?.title || 'General';
+  const tutorSession = useTutorSession({
+    initialMessages: initialState.messages.length > 0 ? initialState.messages : [{
+      id: 'initial-teacher-msg',
+      role: 'assistant',
+      content: INITIAL_TEACHER_PROMPT,
+      timestamp: Date.now(),
+    }],
+    context: {
+      week: currentWeek,
+      session: currentSession,
+      phase: currentPhase.name,
+      elapsedMinutes: Math.floor(elapsedSeconds / 60),
+      topic: activeTopic,
+      protocolStep: activeProtocolStep,
+    },
+    image: currentPaperSnapshot,
+    onReply: (reply) => {
+      if (speechSettings.autoSpeak) speakInSpanish(reply, speechSettings);
+    },
+  });
+  const { messages, setMessages, isLoading, error: tutorError, retryLast, sendMessage } = tutorSession;
 
   useEffect(() => {
-    localStorage.setItem('math_tutor_session_num', currentSession.toString());
-  }, [currentSession]);
-
-  useEffect(() => {
-    localStorage.setItem('math_tutor_messages', JSON.stringify(messages));
-  }, [messages]);
+    saveTutorState(localStorage, { week: currentWeek, session: currentSession, messages });
+  }, [currentWeek, currentSession, messages]);
 
   // Timer tick
   useEffect(() => {
@@ -148,77 +137,8 @@ export default function App() {
     );
   };
 
-  // Send message to Gemini server
-  const handleSendMessage = async (text: string, attachedImage?: string) => {
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-      imageSnapshot: attachedImage || currentPaperSnapshot || undefined,
-      protocolStep: activeProtocolStep,
-    };
-
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    setIsLoading(true);
-
-    try {
-      const activeTopic = SYLLABUS.find((s) => s.week === currentWeek)?.title || 'General';
-      const res = await fetch('/api/tutor/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          image: attachedImage || currentPaperSnapshot || null,
-          sessionContext: {
-            week: currentWeek,
-            session: currentSession,
-            phase: currentPhase.name,
-            elapsedMinutes: Math.floor(elapsedSeconds / 60),
-            topic: activeTopic,
-            protocolStep: activeProtocolStep,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP error ${res.status}`);
-      }
-
-      const data = await res.json();
-      const replyText = data.reply || 'No recibí respuesta del profesor.';
-
-      const profMsg: ChatMessage = {
-        id: `prof-${Date.now()}`,
-        role: 'assistant',
-        content: replyText,
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, profMsg]);
-
-      // Speak reply if autoSpeak enabled
-      if (speechSettings.autoSpeak) {
-        speakInSpanish(replyText, speechSettings);
-      }
-    } catch (err: any) {
-      console.error('Error calling tutor API:', err);
-      const errorMsg: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content:
-          'Hubo un problema de conexión con el aula. Por favor repíteme tu última frase o pulsa de nuevo "Mirar mi papel".',
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleSendMessage = (text: string, attachedImage?: string) =>
+    sendMessage(text, attachedImage || undefined);
 
   // Tutor review triggered from paper view
   const handleRequestTutorReview = (snapshot?: string, note?: string) => {
@@ -371,6 +291,8 @@ export default function App() {
               speechSettings={speechSettings}
               onUpdateSpeechSettings={handleUpdateSpeechSettings}
               onRequestTutorReview={() => handleRequestTutorReview()}
+              error={tutorError}
+              onRetry={() => void retryLast()}
             />
           </div>
         </div>
