@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 :focus-visible {
   outline: 3px solid #f59e0b;

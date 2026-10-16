@@ -29,6 +29,19 @@ const valid = {
 };
 
 describe('createApp tutor endpoint', () => {
+  it('exposes a minimal health check without leaking configuration', async () => {
+    const app = createApp({ generate: vi.fn() });
+    const request = httpMocks.createRequest({ method: 'GET', url: '/api/health' });
+    const response = httpMocks.createResponse({ eventEmitter: EventEmitter });
+    await new Promise<void>((resolve) => {
+      response.on('end', resolve);
+      app(request, response);
+    });
+
+    expect(response._getStatusCode()).toBe(200);
+    expect(response._getJSONData()).toEqual({ status: 'ok' });
+  });
+
   it('rejects malformed and oversized requests with stable public errors', async () => {
     const app = createApp({ generate: vi.fn() });
     const malformed = await invoke(app, { messages: [{ role: 'system', content: 'x' }] });

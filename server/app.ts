@@ -46,6 +46,10 @@ export function createApp(dependencies: AppDependencies): Express {
   });
   app.use(express.json({ limit: '9mb' }));
 
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok' });
+  });
+
   app.post('/api/tutor/chat', async (req, res) => {
     const key = req.ip || req.socket.remoteAddress || 'unknown';
     const timestamp = now();
@@ -69,6 +73,7 @@ export function createApp(dependencies: AppDependencies): Express {
   });
 
   app.post('/api/camera/sessions', (_req, res) => {
+    cameraStore.sweep();
     res.status(201).json(cameraStore.create());
   });
 
