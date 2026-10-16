@@ -1,313 +1,82 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect } from 'react';
-import {
-  GraduationCap,
-  Clock,
-  BookOpen,
-  Camera,
-  FileCheck2,
-  Volume2,
-  VolumeX,
-  RotateCcw,
-  Sparkles,
-  Award,
-  ChevronDown,
-  Info,
-} from 'lucide-react';
-import { ChatMessage, SessionPhase, PostmortemData, SyllabusItem } from './types/tutor';
-import { SESSION_PHASES, SYLLABUS } from './data/syllabus';
-import { CameraPaperView } from './components/CameraPaperView';
-import { SessionTimeline } from './components/SessionTimeline';
-import { ClassroomFeed } from './components/ClassroomFeed';
-import { SyllabusSelector } from './components/SyllabusSelector';
-import { PostmortemModal } from './components/PostmortemModal';
+import { useMemo, useState } from 'react';
+import { AppShell, type AppMode } from './components/AppShell';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { MobileCamView } from './components/MobileCamView';
-import { speakInSpanish, stopSpeaking, SpeechSettings } from './utils/speech';
-import { loadTutorState, saveTutorState } from './utils/persistence';
-import { useTutorSession } from './hooks/useTutorSession';
+import { HomeScreen } from './screens/HomeScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
+import { SessionScreen } from './screens/SessionScreen';
+import { exportBackup, importBackup } from './state/backup';
+import { createDefaultPersonalState, type PersonalStateV2 } from './state/personal-state';
+import { PersonalStateRepository } from './state/personal-state-repository';
+import { usePersonalSession } from './hooks/usePersonalSession';
+import { startSession } from './session/session-controller';
+import { consumePairingFragment } from './camera/pairing';
 
-const INITIAL_TEACHER_PROMPT =
-  '¡Hola! Empecemos nuestra sesión de hoy. ¿En qué semana y sesión estás y qué fallaste la última vez que practicaste?';
+type Confirmation = 'new' | 'import' | 'reset' | null;
 
 export default function App() {
-  // Check if opened on mobile phone via camera link or QR code
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const mobileCamSession =
-    urlParams?.get('cam') ||
-    (typeof window !== 'undefined' && window.location.pathname === '/cam'
-      ? urlParams?.get('session') || 'DEFAULT'
-      : null);
-  const mobileCamCredential = urlParams?.get('key');
+  const [mobilePairing] = useState(() => typeof window === 'undefined' ? null : consumePairingFragment(window.location, window.history));
+  if (mobilePairing) return <MobileCamView sessionId={mobilePairing.sessionId} writeCredential={mobilePairing.writeCredential} />;
+  return <PersonalApp />;
+}
 
-  if (mobileCamSession) {
-    return <MobileCamView sessionId={mobileCamSession} writeCredential={mobileCamCredential ?? ''} />;
-  }
+function PersonalApp() {
+  const repository = useMemo(() => new PersonalStateRepository(localStorage), []);
+  const controller = usePersonalSession({ repository });
+  const [mode, setMode] = useState<AppMode>('home');
+  const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [pendingImport, setPendingImport] = useState<PersonalStateV2 | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [initialState] = useState(() => loadTutorState(localStorage));
-  const [currentWeek, setCurrentWeek] = useState(initialState.week);
-  const [currentSession, setCurrentSession] = useState(initialState.session);
-  const [currentPaperSnapshot, setCurrentPaperSnapshot] = useState<string | null>(null);
-
-  // 60-minute Session timer
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<SessionPhase>(SESSION_PHASES[0]);
-
-  // Protocol 7 steps
-  const [activeProtocolStep, setActiveProtocolStep] = useState<number>(1);
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-
-  // Modals & Panels
-  const [isSyllabusOpen, setIsSyllabusOpen] = useState(false);
-  const [isPostmortemOpen, setIsPostmortemOpen] = useState(false);
-
-  // Speech settings
-  const [speechSettings, setSpeechSettings] = useState<SpeechSettings>({
-    rate: 1.0,
-    pitch: 1.0,
-    volume: 1.0,
-    autoSpeak: true,
-  });
-
-  const activeTopic = SYLLABUS.find((item) => item.week === currentWeek)?.title || 'General';
-  const tutorSession = useTutorSession({
-    initialMessages: initialState.messages.length > 0 ? initialState.messages : [{
-      id: 'initial-teacher-msg',
-      role: 'assistant',
-      content: INITIAL_TEACHER_PROMPT,
-      timestamp: Date.now(),
-    }],
-    context: {
-      week: currentWeek,
-      session: currentSession,
-      phase: currentPhase.name,
-      elapsedMinutes: Math.floor(elapsedSeconds / 60),
-      topic: activeTopic,
-      protocolStep: activeProtocolStep,
-    },
-    image: currentPaperSnapshot,
-    onReply: (reply) => {
-      if (speechSettings.autoSpeak) speakInSpanish(reply, speechSettings);
-    },
-  });
-  const { messages, setMessages, isLoading, error: tutorError, retryLast, sendMessage } = tutorSession;
-
-  useEffect(() => {
-    saveTutorState(localStorage, { week: currentWeek, session: currentSession, messages });
-  }, [currentWeek, currentSession, messages]);
-
-  // Timer tick
-  useEffect(() => {
-    let interval: any = null;
-    if (isTimerRunning) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => {
-          const next = prev + 1;
-          const mins = Math.floor(next / 60);
-
-          // Auto-update phase based on time
-          const matchingPhase = SESSION_PHASES.find(
-            (p) => mins >= p.startMin && mins < p.endMin
-          );
-          if (matchingPhase && matchingPhase.id !== currentPhase.id) {
-            setCurrentPhase(matchingPhase);
-          }
-          return next;
-        });
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, currentPhase]);
-
-  // Update speech settings
-  const handleUpdateSpeechSettings = (newSettings: Partial<SpeechSettings>) => {
-    setSpeechSettings((prev) => ({ ...prev, ...newSettings }));
+  const start = () => { controller.start(); setMode('session'); };
+  const replaceWithNew = () => {
+    controller.replaceState(startSession({ ...controller.state, activeSession: null }, controller.selection, Date.now()));
+    setConfirmation(null);
+    setMode('session');
+    setStatus('Nueva sesión iniciada. La anterior se ha sustituido.');
   };
-
-  // Toggle protocol step completed
-  const handleToggleStepComplete = (step: number) => {
-    setCompletedSteps((prev) =>
-      prev.includes(step) ? prev.filter((s) => s !== step) : [...prev, step]
-    );
+  const download = () => {
+    const blob = new Blob([exportBackup(controller.state)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `math-teacher-copia-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setStatus('Copia de seguridad descargada.');
   };
-
-  const handleSendMessage = (text: string, attachedImage?: string) =>
-    sendMessage(text, attachedImage || undefined);
-
-  // Tutor review triggered from paper view
-  const handleRequestTutorReview = (snapshot?: string, note?: string) => {
-    const imageToUse = snapshot || currentPaperSnapshot;
-    if (!imageToUse) {
-      handleSendMessage(
-        'Profesor, por favor examina mi razonamiento y dime qué paso o comprobación debo realizar a continuación.'
-      );
-      return;
-    }
-    setCurrentPaperSnapshot(imageToUse);
-    handleSendMessage(
-      note ||
-        'Profesor, estoy escribiendo en mi papel. Por favor míralo y dime si la deducción es correcta o si detectas algún fallo conceptual.',
-      imageToUse
-    );
-  };
-
-  // Start a fresh 60-min session
-  const handleNewSession = () => {
-    stopSpeaking();
-    setElapsedSeconds(0);
-    setIsTimerRunning(false);
-    setCurrentPhase(SESSION_PHASES[0]);
-    setCompletedSteps([]);
-    setActiveProtocolStep(1);
-    const initialMsg: ChatMessage = {
-      id: `session-start-${Date.now()}`,
-      role: 'assistant',
-      content: INITIAL_TEACHER_PROMPT,
-      timestamp: Date.now(),
-    };
-    setMessages([initialMsg]);
-    if (speechSettings.autoSpeak) {
-      speakInSpanish(INITIAL_TEACHER_PROMPT, speechSettings);
+  const prepareImport = async (file: File) => {
+    setError(null);
+    try {
+      setPendingImport(importBackup(await file.text()));
+      setConfirmation('import');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'La copia de seguridad no se puede leer.');
     }
   };
-
-  const handleSavePostmortem = (data: PostmortemData) => {
-    const postmortemMsg: ChatMessage = {
-      id: `postmortem-${Date.now()}`,
-      role: 'assistant',
-      content: `📋 **RESUMEN DE ESTADO Y POSTMORTEM (Semana ${currentWeek}, Sesión ${currentSession})**
-
-• **Error Clasificado**: ${data.errorType.toUpperCase()}
-• **Diagnóstico**: ${data.description || 'Analizado durante la defensa'}
-• **Regla Corregida**: ${data.correctedRule || 'Revisar siempre casos de frontera y dominio'}
-• **Problema Variante (48 horas)**: ${data.variantProblem48h || 'Variante paramétrica en extremos'}
-• **Conceptos Dominados**: ${data.masteredConcepts.join(', ') || 'Planteamiento y conjetura'}
-• **Conceptos Abiertos**: ${data.openConcepts.join(', ') || 'Comprobación de límites'}
-• **Próxima Repetición**: En 48 horas.`,
-      timestamp: Date.now(),
-    };
-    setMessages((prev) => [...prev, postmortemMsg]);
+  const confirmImport = () => {
+    if (pendingImport) controller.replaceState(pendingImport);
+    setPendingImport(null);
+    setConfirmation(null);
+    setMode('home');
+    setStatus('Copia importada correctamente.');
+  };
+  const confirmReset = () => {
+    repository.clear();
+    controller.replaceState(createDefaultPersonalState(Date.now()));
+    setConfirmation(null);
+    setMode('home');
+    setStatus('Datos locales eliminados.');
   };
 
-  return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="border-b border-stone-800 bg-stone-900/90 backdrop-blur-md px-4 py-2.5 sticky top-0 z-40 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 flex items-center justify-center text-white shadow-md shadow-amber-600/30">
-            <GraduationCap className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-sm sm:text-base font-bold text-stone-100 tracking-tight">
-                Profesor de Matemáticas Preuniversitarias
-              </h1>
-              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 hidden sm:inline-block">
-                Oral en Tiempo Real
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-400 flex items-center gap-1.5">
-              <span>Nivel Selectividad & Puente</span>
-              <span>·</span>
-              <span className="text-amber-400/90">Perfil: Ingeniero & Opciones SPX</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2">
-          {/* Postmortem Button */}
-          <button
-            onClick={() => setIsPostmortemOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-750 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm"
-            title="Abrir resumen y clasificación de errores postmortem (53-60 min)"
-          >
-            <FileCheck2 className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Postmortem & Resumen</span>
-          </button>
-
-          {/* New Session Button */}
-          <button
-            onClick={handleNewSession}
-            className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs flex items-center gap-1 border border-stone-700"
-            title="Reiniciar sesión de 60 minutos con la pregunta obligatoria inicial"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Nueva Sesión</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 p-3 sm:p-4 max-w-7xl w-full mx-auto flex flex-col space-y-3">
-        {/* 13-Week Syllabus Navigator */}
-        <SyllabusSelector
-          currentWeek={currentWeek}
-          currentSession={currentSession}
-          onSelectWeek={(w) => setCurrentWeek(w)}
-          onSelectSession={(s) => setCurrentSession(s)}
-          isOpen={isSyllabusOpen}
-          onToggleOpen={() => setIsSyllabusOpen(!isSyllabusOpen)}
-        />
-
-        {/* 60-Minute Session Timeline & 7-Step Protocol */}
-        <SessionTimeline
-          elapsedSeconds={elapsedSeconds}
-          isRunning={isTimerRunning}
-          onToggleTimer={() => setIsTimerRunning(!isTimerRunning)}
-          onResetTimer={() => setElapsedSeconds(0)}
-          currentPhase={currentPhase}
-          onSelectPhase={(p) => setCurrentPhase(p)}
-          activeProtocolStep={activeProtocolStep}
-          onSelectProtocolStep={(s) => setActiveProtocolStep(s)}
-          completedSteps={completedSteps}
-          onToggleStepComplete={handleToggleStepComplete}
-        />
-
-        {/* Dual Split Screen: Paper/Camera View on Left, Oral Classroom Feed on Right */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-[560px]">
-          {/* Left Column: Camera / Screen / Paper Canvas (7 Cols on desktop) */}
-          <div className="lg:col-span-7 h-full min-h-[400px]">
-            <CameraPaperView
-              onCaptureSnapshot={(dataUrl) => setCurrentPaperSnapshot(dataUrl)}
-              onRequestTutorReview={handleRequestTutorReview}
-              isInspecting={isLoading}
-            />
-          </div>
-
-          {/* Right Column: Oral Classroom Dialogue Feed (5 Cols on desktop) */}
-          <div className="lg:col-span-5 h-full min-h-[400px]">
-            <ClassroomFeed
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              isLoading={isLoading}
-              currentPaperSnapshot={currentPaperSnapshot}
-              speechSettings={speechSettings}
-              onUpdateSpeechSettings={handleUpdateSpeechSettings}
-              onRequestTutorReview={() => handleRequestTutorReview()}
-              error={tutorError}
-              onRetry={() => void retryLast()}
-            />
-          </div>
-        </div>
-      </main>
-
-      {/* Postmortem Modal */}
-      <PostmortemModal
-        isOpen={isPostmortemOpen}
-        onClose={() => setIsPostmortemOpen(false)}
-        currentWeek={currentWeek}
-        currentSession={currentSession}
-        onSavePostmortem={handleSavePostmortem}
-        onSpeakSummary={(text: string) => speakInSpanish(text, speechSettings)}
-      />
-
-    </div>
-  );
+  return <AppShell mode={mode} onNavigate={(next) => { if (next === 'session' && !controller.activeSession) start(); else setMode(next); }} status={status}>
+    {error && <p role="alert" className="mb-4 rounded-lg border border-red-800 bg-red-950/50 p-3 text-sm text-red-200">{error}</p>}
+    {mode === 'home' && <HomeScreen state={controller.state} now={Date.now()} onContinue={() => setMode('session')} onStart={start} onCompleteReview={controller.completeReview} onNewSession={() => setConfirmation('new')} />}
+    {mode === 'session' && <SessionScreen controller={controller} onFinished={() => { setMode('home'); setStatus('Sesión guardada y repaso programado cuando corresponde.'); }} onRequestNew={() => setConfirmation('new')} />}
+    {mode === 'history' && <HistoryScreen state={controller.state} onExport={download} onImport={prepareImport} onReset={() => setConfirmation('reset')} />}
+    <ConfirmDialog open={confirmation === 'new'} title="¿Empezar una sesión nueva?" description="La sesión activa se sustituirá. Tu historial ya completado no cambiará." confirmLabel="Empezar nueva" onConfirm={replaceWithNew} onCancel={() => setConfirmation(null)} />
+    <ConfirmDialog open={confirmation === 'import'} title="¿Importar esta copia?" description="La copia sustituirá los datos locales actuales después de haber sido validada." confirmLabel="Importar copia" onConfirm={confirmImport} onCancel={() => { setConfirmation(null); setPendingImport(null); }} />
+    <ConfirmDialog open={confirmation === 'reset'} title="¿Borrar todos los datos locales?" description="Se eliminarán la sesión activa, el historial, los repasos y las preferencias de este navegador." confirmLabel="Borrar datos" destructive onConfirm={confirmReset} onCancel={() => setConfirmation(null)} />
+  </AppShell>;
 }

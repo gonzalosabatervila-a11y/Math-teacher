@@ -1,5 +1,12 @@
 export type Role = 'user' | 'assistant' | 'system';
 
+export interface TutorReply {
+  message: string;
+  mode: 'question' | 'hint' | 'verification' | 'solution';
+  checks: string[];
+  uncertainty?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: Role;
@@ -8,6 +15,9 @@ export interface ChatMessage {
   imageSnapshot?: string;
   protocolStep?: number;
   isSpoken?: boolean;
+  tutorMode?: 'question' | 'hint' | 'verification' | 'solution';
+  tutorChecks?: string[];
+  tutorUncertainty?: string;
 }
 
 export type PhaseId = 'recall' | 'theory' | 'problem' | 'defense' | 'postmortem';

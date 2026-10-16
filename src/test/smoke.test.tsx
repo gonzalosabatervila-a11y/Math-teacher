@@ -8,7 +8,7 @@ describe('Math Teacher application', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('heading', { name: 'Profesor de Matemáticas Preuniversitarias' })
+      screen.getByRole('heading', { name: 'Profesor de Matemáticas' })
     ).toBeInTheDocument();
   });
 });

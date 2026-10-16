@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 
-import type { ChatMessage } from '../types/tutor';
+import type { ChatMessage, TutorReply } from '../types/tutor';
 
 export interface TutorSessionContext {
   week: number;
@@ -26,6 +26,18 @@ interface TutorSessionResult {
   error: string | null;
   sendMessage: (text: string, image?: string) => Promise<void>;
   retryLast: () => Promise<void>;
+}
+
+function readReply(value: unknown): TutorReply {
+  if (typeof value === 'string') return { message: value.trim().slice(0, 4_000) || 'No recibí respuesta del profesor.', mode: 'question', checks: [] };
+  if (!value || typeof value !== 'object') return { message: 'No recibí respuesta del profesor.', mode: 'question', checks: [] };
+  const item = value as Record<string, unknown>;
+  const modes: TutorReply['mode'][] = ['question', 'hint', 'verification', 'solution'];
+  const message = typeof item.message === 'string' ? item.message.trim().slice(0, 4_000) : '';
+  const mode = modes.includes(item.mode as TutorReply['mode']) ? item.mode as TutorReply['mode'] : 'question';
+  const checks = Array.isArray(item.checks) ? item.checks.filter((check): check is string => typeof check === 'string').slice(0, 5).map((check) => check.slice(0, 300)) : [];
+  const uncertainty = typeof item.uncertainty === 'string' ? item.uncertainty.slice(0, 500) : undefined;
+  return { message: message || 'No recibí respuesta del profesor.', mode, checks, ...(uncertainty ? { uncertainty } : {}) };
 }
 
 export function useTutorSession(options: UseTutorSessionOptions): TutorSessionResult {
@@ -75,11 +87,11 @@ export function useTutorSession(options: UseTutorSessionOptions): TutorSessionRe
         }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as { reply?: string };
-      const reply = data.reply?.trim() || 'No recibí respuesta del profesor.';
-      const assistant: ChatMessage = { id: `prof-${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() };
+      const data = await response.json() as { reply?: unknown };
+      const reply = readReply(data.reply);
+      const assistant: ChatMessage = { id: `prof-${Date.now()}`, role: 'assistant', content: reply.message, timestamp: Date.now(), tutorMode: reply.mode, tutorChecks: reply.checks, ...(reply.uncertainty ? { tutorUncertainty: reply.uncertainty } : {}) };
       setMessages((current) => [...current, assistant]);
-      options.onReply?.(reply);
+      options.onReply?.(reply.message);
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
         setError('Hubo un problema de conexión con el aula. Puedes reintentar el último mensaje.');

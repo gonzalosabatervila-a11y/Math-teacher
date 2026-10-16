@@ -14,6 +14,8 @@ Los ejemplos de SPX, opciones y Black–Scholes son analogías de transferencia 
 - Las sesiones de cámara usan identificadores y credenciales aleatorios separados para lectura y escritura, caducan y conservan únicamente el último fotograma en memoria.
 - Las imágenes enviadas al tutor se procesan para responder a la petición; no se persisten en el almacenamiento local de la aplicación.
 - El historial local conserva solo texto, con un límite de mensajes. Borrar los datos del sitio elimina ese historial.
+- El progreso, historial, repasos y preferencias pertenecen al navegador del usuario. La pantalla Historial permite descargar e importar una copia JSON validada; las importaciones incompatibles no sustituyen el estado actual.
+- El enlace de emparejamiento móvil coloca el identificador y la credencial de escritura en el fragmento `#`, que el móvil elimina de la barra inmediatamente. El streaming usa `Authorization`; nunca se admiten credenciales en la query.
 - Para una implantación pública se deben añadir autenticación, límites distribuidos y supervisión operativa delante del servidor.
 
 ## Requisitos e instalación
@@ -34,6 +36,7 @@ Completa `GEMINI_API_KEY` en `.env.local`. No publiques ese archivo.
 npm run dev          # desarrollo, cliente y API
 npm test             # pruebas automatizadas
 npm run test:coverage
+npm run test:e2e    # recorridos Chromium; instalar antes con npx playwright install chromium
 npm run lint         # comprobación de tipos
 npm run build        # compilación de producción
 npm start            # servidor de producción tras compilar
@@ -48,11 +51,11 @@ El modelo se puede cambiar con `GEMINI_MODEL`; por defecto se usa `gemini-2.5-fl
 - `server.ts`: composición del servidor Express y entrega de los recursos compilados.
 - `docs/audit-report.md`: auditoría técnica y funcional, decisiones y pruebas.
 
-El navegador llama exclusivamente a las rutas `/api`. El servidor valida tamaño, formato y estructura antes de construir la petición a Gemini. Las rutas de cámara mantienen el estado solo en memoria, por lo que una sesión no sobrevive a un reinicio y no se comparte entre varias instancias.
+El navegador llama exclusivamente a las rutas `/api`. El servidor valida tamaño, formato y estructura antes de construir la petición a Gemini. Las rutas de cámara mantienen el estado solo en memoria, por lo que una sesión no sobrevive a un reinicio y no se comparte entre varias instancias. El modo de pruebas usa un proveedor simulado únicamente cuando `NODE_ENV=test`; producción exige una clave real.
 
 ## Despliegue seguro
 
-Ejecuta `npm ci`, `npm test`, `npm run lint` y `npm run build` en integración continua. Sirve la aplicación detrás de HTTPS, configura `GEMINI_API_KEY` como secreto del entorno y restringe el acceso si contiene trabajo de alumnos. Para escalar horizontalmente, sustituye el estado de cámara en memoria y el limitador local por servicios compartidos con caducidad. Mantén las cabeceras de seguridad y no añadas endpoints que modifiquen repositorios o exporten secretos.
+Ejecuta `npm ci`, `npm test`, `npm run lint`, `npm run build`, `npm run test:e2e` y `npm audit --omit=dev --audit-level=high` en integración continua. Sirve la aplicación detrás de HTTPS, configura `GEMINI_API_KEY` como secreto del entorno y restringe el acceso si contiene trabajo de alumnos. La cámara móvil está pensada para el mismo entorno privado o red de confianza; no publiques el servicio sin autenticación perimetral. Para escalar horizontalmente, sustituye el estado de cámara en memoria y el limitador local por servicios compartidos con caducidad.
 
 ## Limitaciones conocidas
 

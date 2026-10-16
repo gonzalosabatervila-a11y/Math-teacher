@@ -70,4 +70,11 @@ describe('camera API', () => {
     expect(stored.status).toBe(204);
     expect(latest).toMatchObject({ status: 200, json: { frame } });
   });
+
+  it('rejects camera credentials supplied in the query string', async () => {
+    const app = createApp({ generate: vi.fn(), cameraStore: new CameraSessionStore() });
+    const created = await invoke(app, 'POST', '/api/camera/sessions');
+    const response = await invoke(app, 'GET', `/api/camera/sessions/${created.json.sessionId}/latest?credential=${created.json.readCredential}`);
+    expect(response).toMatchObject({ status: 404, json: { code: 'CAMERA_SESSION_UNAVAILABLE' } });
+  });
 });

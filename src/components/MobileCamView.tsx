@@ -31,6 +31,7 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCr
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const transmitIntervalRef = useRef<any>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Keep phone screen awake
   useEffect(() => {
@@ -54,6 +55,7 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCr
   const startCamera = useCallback(async () => {
     setErrorMsg(null);
     try {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
@@ -64,6 +66,7 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCr
       });
 
       setStream(mediaStream);
+      streamRef.current = mediaStream;
       setIsCameraActive(true);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -85,14 +88,13 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCr
   useEffect(() => {
     startCamera();
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((t) => t.stop());
-      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       if (transmitIntervalRef.current) {
         clearInterval(transmitIntervalRef.current);
       }
     };
-  }, []);
+  }, [startCamera]);
 
   // Toggle flashlight / torch
   const toggleTorch = async () => {

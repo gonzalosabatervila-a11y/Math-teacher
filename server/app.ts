@@ -4,7 +4,9 @@ import { GoogleGenAI } from '@google/genai';
 import { publicError } from './errors';
 import { CameraSessionError, CameraSessionStore } from './camera-session-store';
 import { buildTutorContents, SYSTEM_INSTRUCTION, type TutorContent } from './tutor';
+import { parseTutorReply } from './tutor-response';
 import { parseTutorRequest, RequestValidationError } from './validation';
+import { InMemoryRateLimiter } from './rate-limiter';
 
 export interface AppDependencies {
   apiKey?: string;
@@ -12,9 +14,9 @@ export interface AppDependencies {
   generate?: (contents: TutorContent[], systemInstruction: string, model: string) => Promise<string>;
   now?: () => number;
   cameraStore?: CameraSessionStore;
+  rateLimiter?: InMemoryRateLimiter;
+  providerTimeoutMs?: number;
 }
-
-interface RateBucket { start: number; count: number }
 
 export function createApp(dependencies: AppDependencies): Express {
   const model = dependencies.model ?? process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
@@ -34,8 +36,12 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const app = express();
   const cameraStore = dependencies.cameraStore ?? new CameraSessionStore({ now: dependencies.now });
-  const buckets = new Map<string, RateBucket>();
   const now = dependencies.now ?? Date.now;
+  const rateLimiter = dependencies.rateLimiter ?? new InMemoryRateLimiter({ limit: 20, windowMs: 60_000, maxBuckets: 1_000 });
+  const providerTimeoutMs = dependencies.providerTimeoutMs ?? 15_000;
+  const maintenance = setInterval(() => { cameraStore.sweep(); rateLimiter.prune(now()); }, 10 * 60_000);
+  maintenance.unref?.();
+  app.locals.cleanup = () => clearInterval(maintenance);
 
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
@@ -50,18 +56,23 @@ export function createApp(dependencies: AppDependencies): Express {
     res.json({ status: 'ok' });
   });
 
+  app.get('/api/ready', (_req, res) => {
+    res.json({ status: 'ready' });
+  });
+
   app.post('/api/tutor/chat', async (req, res) => {
     const key = req.ip || req.socket.remoteAddress || 'unknown';
     const timestamp = now();
-    const bucket = buckets.get(key);
-    if (!bucket || timestamp - bucket.start >= 60_000) buckets.set(key, { start: timestamp, count: 1 });
-    else if (bucket.count >= 20) return res.status(429).json(publicError('Demasiadas solicitudes. Inténtalo de nuevo en un minuto.', 'RATE_LIMITED'));
-    else bucket.count += 1;
+    if (!rateLimiter.check(key, timestamp).allowed) return res.status(429).json(publicError('Demasiadas solicitudes. Inténtalo de nuevo en un minuto.', 'RATE_LIMITED'));
 
     try {
       const tutorRequest = parseTutorRequest(req.body);
-      const reply = await generate!(buildTutorContents(tutorRequest), SYSTEM_INSTRUCTION, model);
-      return res.json({ reply });
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const providerText = await Promise.race([
+        generate!(buildTutorContents(tutorRequest), SYSTEM_INSTRUCTION, model),
+        new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error('provider timeout')), providerTimeoutMs); }),
+      ]).finally(() => { if (timeout) clearTimeout(timeout); });
+      return res.json({ reply: parseTutorReply(providerText) });
     } catch (error) {
       if (error instanceof RequestValidationError) {
         const status = error.code === 'IMAGE_TOO_LARGE' ? 413 : 400;
@@ -79,8 +90,7 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const cameraCredential = (req: express.Request): string => {
     const header = req.get('authorization');
-    if (header?.startsWith('Bearer ')) return header.slice(7);
-    return typeof req.query.credential === 'string' ? req.query.credential : '';
+    return header?.startsWith('Bearer ') ? header.slice(7) : '';
   };
 
   const parseFrame = (value: unknown): string => {
@@ -147,6 +157,13 @@ export function createApp(dependencies: AppDependencies): Express {
 
   app.use('/api', (_req, res) => {
     res.status(404).json(publicError('Ruta no encontrada.', 'NOT_FOUND'));
+  });
+
+  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const item = error as { type?: string; status?: number };
+    if (item.type === 'entity.too.large' || item.status === 413) return res.status(413).json(publicError('La solicitud supera el límite permitido.', 'BODY_TOO_LARGE'));
+    if (item.type === 'request.aborted' || item.status === 408) return res.status(408).json(publicError('La solicitud no se completó a tiempo.', 'REQUEST_TIMEOUT'));
+    return res.status(400).json(publicError('La solicitud no es válida.', 'INVALID_REQUEST'));
   });
 
   return app;

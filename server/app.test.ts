@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 
 import httpMocks from 'node-mocks-http';
 import { describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
 
 import { createApp } from './app';
 
@@ -29,6 +30,12 @@ const valid = {
 };
 
 describe('createApp tutor endpoint', () => {
+  it('returns a stable structured tutor reply', async () => {
+    const app = createApp({ generate: vi.fn().mockResolvedValue(JSON.stringify({ message: '¿Cuál es el dominio?', mode: 'question', checks: ['Escribe la restricción'] })) });
+    const response = await invoke(app, valid);
+    expect(response).toMatchObject({ status: 200, json: { reply: { message: '¿Cuál es el dominio?', mode: 'question', checks: ['Escribe la restricción'] } } });
+  });
+
   it('exposes a minimal health check without leaking configuration', async () => {
     const app = createApp({ generate: vi.fn() });
     const request = httpMocks.createRequest({ method: 'GET', url: '/api/health' });
@@ -40,6 +47,38 @@ describe('createApp tutor endpoint', () => {
 
     expect(response._getStatusCode()).toBe(200);
     expect(response._getJSONData()).toEqual({ status: 'ok' });
+  });
+
+  it('reports readiness without contacting the tutor provider or exposing configuration', async () => {
+    const generate = vi.fn();
+    const app = createApp({ generate, model: 'private-model-name' });
+    const request = httpMocks.createRequest({ method: 'GET', url: '/api/ready' });
+    const response = httpMocks.createResponse({ eventEmitter: EventEmitter });
+    await new Promise<void>((resolve) => { response.on('end', resolve); app(request, response); });
+    expect(response._getStatusCode()).toBe(200);
+    expect(response._getJSONData()).toEqual({ status: 'ready' });
+    expect(generate).not.toHaveBeenCalled();
+    expect(JSON.stringify(response._getJSONData())).not.toContain('private-model-name');
+  });
+
+  it('maps a provider timeout to a stable unavailable response', async () => {
+    vi.useFakeTimers();
+    const app = createApp({ generate: vi.fn(() => new Promise<string>(() => {})), providerTimeoutMs: 15 });
+    const responsePromise = invoke(app, valid);
+    await vi.advanceTimersByTimeAsync(15);
+    const response = await responsePromise;
+    expect(response).toMatchObject({ status: 502, json: { code: 'TUTOR_UNAVAILABLE' } });
+    vi.useRealTimers();
+  });
+
+  it('returns a controlled 413 response for an oversized JSON body', async () => {
+    const app = createApp({ generate: vi.fn() });
+    const response = await request(app)
+      .post('/api/tutor/chat')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ padding: 'x'.repeat(9 * 1024 * 1024 + 1) }));
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({ error: 'La solicitud supera el límite permitido.', code: 'BODY_TOO_LARGE' });
   });
 
   it('rejects malformed and oversized requests with stable public errors', async () => {

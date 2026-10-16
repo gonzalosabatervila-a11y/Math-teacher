@@ -20,6 +20,8 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { createPairingFragment } from '../camera/pairing';
+import { openCameraStream, type CameraStreamState } from '../camera/stream-client';
 
 interface CameraPaperViewProps {
   onCaptureSnapshot: (dataUrl: string) => void;
@@ -39,7 +41,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   onRequestTutorReview,
   isInspecting = false,
 }) => {
-  const [sourceType, setSourceType] = useState<SourceType>('mobile');
+  const [sourceType, setSourceType] = useState<SourceType | null>(null);
 
   // Mobile pairing state
   const [cameraAccess, setCameraAccess] = useState<CameraAccess | null>(null);
@@ -47,9 +49,9 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   const [mobileFrame, setMobileFrame] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [lastFrameTime, setLastFrameTime] = useState<number | null>(null);
+  const [streamState, setStreamState] = useState<CameraStreamState | 'idle'>('idle');
 
   // Local Webcam state
-  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [webcamError, setWebcamError] = useState<string | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -61,7 +63,8 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270 degrees
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const sseRef = useRef<EventSource | null>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const onCaptureSnapshotRef = useRef(onCaptureSnapshot);
 
   useEffect(() => {
@@ -71,11 +74,16 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   // Construct mobile URL
   const mobileUrl = typeof window !== 'undefined'
     && cameraAccess
-    ? `${window.location.origin}/?cam=${encodeURIComponent(cameraAccess.sessionId)}&key=${encodeURIComponent(cameraAccess.writeCredential)}`
+    ? `${window.location.origin}/cam${createPairingFragment({ sessionId: cameraAccess.sessionId, writeCredential: cameraAccess.writeCredential })}`
     : '';
 
   // Initialize session on server and connect SSE stream
   useEffect(() => {
+    if (sourceType !== 'mobile') {
+      streamAbortRef.current?.abort();
+      setStreamState('idle');
+      return;
+    }
     let isMounted = true;
 
     const initAndListen = async () => {
@@ -89,32 +97,23 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
         if (!isMounted) return;
         setCameraAccess(access);
 
-        // Close previous SSE if any
-        if (sseRef.current) {
-          sseRef.current.close();
-        }
-
-        const sse = new EventSource(`/api/camera/sessions/${access.sessionId}/stream?credential=${encodeURIComponent(access.readCredential)}`);
-        sseRef.current = sse;
-
-        sse.onmessage = (event) => {
-          if (!isMounted) return;
-          try {
-            const data = JSON.parse(event.data);
+        const controller = new AbortController();
+        streamAbortRef.current = controller;
+        await openCameraStream({
+          url: `/api/camera/sessions/${access.sessionId}/stream`,
+          credential: access.readCredential,
+          signal: controller.signal,
+          onState: (state) => { if (isMounted) setStreamState(state); },
+          onSnapshot: (data) => {
+            if (!isMounted) return;
             if (data.frame) {
               setMobileFrame(data.frame);
               setLastFrameTime(data.lastFrameTime || Date.now());
               onCaptureSnapshotRef.current(data.frame);
             }
             setMobileConnected(Boolean(data.lastFrameTime));
-          } catch (e) {
-            console.warn('Error parsing SSE cam event', e);
-          }
-        };
-
-        sse.onerror = () => {
-          // SSE reconnects automatically
-        };
+          },
+        });
       } catch (err) {
         console.warn('Error setting up cam session:', err);
       }
@@ -124,20 +123,16 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
     return () => {
       isMounted = false;
-      if (sseRef.current) {
-        sseRef.current.close();
-      }
+      streamAbortRef.current?.abort();
     };
-  }, []);
+  }, [sourceType]);
 
   // WebCam setup
   const stopWebcam = useCallback(() => {
-    if (webcamStream) {
-      webcamStream.getTracks().forEach((track) => track.stop());
-      setWebcamStream(null);
-      setIsWebcamActive(false);
-    }
-  }, [webcamStream]);
+    webcamStreamRef.current?.getTracks().forEach((track) => track.stop());
+    webcamStreamRef.current = null;
+    setIsWebcamActive(false);
+  }, []);
 
   const startWebcam = useCallback(
     async (devId?: string) => {
@@ -151,7 +146,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
           audio: false,
         };
         const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-        setWebcamStream(mediaStream);
+        webcamStreamRef.current = mediaStream;
         setIsWebcamActive(true);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -287,7 +282,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
               ) : (
                 <>
                   <WifiOff className="w-3 h-3 text-amber-400" />
-                  <span>Esperando móvil...</span>
+                  <span>{streamState === 'expired' ? 'Sesión caducada' : streamState === 'retrying' ? 'Reconectando…' : streamState === 'connecting' ? 'Conectando…' : 'Esperando móvil…'}</span>
                 </>
               )}
             </div>
@@ -297,6 +292,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
       {/* Main Display Area */}
       <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center min-h-[360px]">
+        {sourceType === null && <div className="max-w-md p-8 text-center"><Camera className="mx-auto h-10 w-10 text-amber-400" /><p className="mt-3 font-semibold text-stone-200">Elige cómo mostrar tu papel</p><p className="mt-1 text-xs text-stone-500">La sesión privada del móvil solo se crea cuando la seleccionas.</p></div>}
         {/* Mode 1: Mobile Camera Feed */}
         {sourceType === 'mobile' && (
           <>
