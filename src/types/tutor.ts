@@ -60,4 +60,9 @@ export interface SyllabusItem {
   topics: string[];
   financialTransfer: string;
   exampleContext: string;
+  learningGoals: string[];
+  curricularTopics: string[];
+  extensionTopics: string[];
+  hypothesisNotes: string[];
+  financialDisclaimer: string;
 }

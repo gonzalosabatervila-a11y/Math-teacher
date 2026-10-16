@@ -117,7 +117,12 @@ export const PROTOCOL_STEPS: ProtocolStep[] = [
   },
 ];
 
-export const SYLLABUS: SyllabusItem[] = [
+type BaseSyllabusItem = Omit<
+  SyllabusItem,
+  'learningGoals' | 'curricularTopics' | 'extensionTopics' | 'hypothesisNotes' | 'financialDisclaimer'
+>;
+
+const BASE_SYLLABUS: BaseSyllabusItem[] = [
   {
     week: 0,
     block: 'Diagnóstico',
@@ -308,3 +313,49 @@ export const SYLLABUS: SyllabusItem[] = [
     exampleContext: 'Simulación de examen de Selectividad de 90 minutos con problemas trampa de álgebra y cálculo.',
   },
 ];
+
+const HYPOTHESIS_NOTES: Partial<Record<number, string[]>> = {
+  4: [
+    'Una función solo tiene inversa funcional en un dominio donde sea inyectiva; puede ser necesario restringir el dominio y declarar la imagen.',
+  ],
+  6: [
+    'La regla de L’Hôpital se aplica a cocientes con forma 0/0 o ∞/∞ y exige funciones derivables en un entorno perforado, además de comprobar que se cumplen sus hipótesis.',
+  ],
+  8: [
+    'Un punto crítico no es automáticamente un extremo: hay que estudiar dominio, fronteras y el cambio de signo o el criterio aplicable.',
+  ],
+  10: [
+    'Las integrales de probabilidad requieren una densidad no negativa y normalizada; el área solo representa probabilidad bajo esas condiciones.',
+  ],
+  12: [
+    'La distribución lognormal de precios es un supuesto de ciertos modelos, incluido Black–Scholes; no garantiza que los precios reales sigan esa distribución.',
+    'Black–Scholes simplifica volatilidad, tipos, liquidez y dinámica del mercado; sus resultados no son predicciones exactas.',
+  ],
+};
+
+const EXTENSION_TOPICS: Partial<Record<number, string[]>> = {
+  2: ['Matrices de covarianzas y carteras de replicación'],
+  3: ['CAPM y factores ortogonales'],
+  7: ['Griegas de opciones: Delta y Gamma'],
+  10: ['Expected Shortfall e integración de payoffs'],
+  11: ['Árbol binomial de Cox–Ross–Rubinstein'],
+  12: ['Modelo de Black–Scholes y precios lognormales'],
+  13: ['Cálculo multivariable, ecuaciones diferenciales e introducción a Itô'],
+};
+
+const FINANCIAL_DISCLAIMER =
+  'Ejemplo de transferencia conceptual: simplifica los mercados y no constituye asesoramiento financiero ni un modelo exacto de precios.';
+
+export const SYLLABUS: SyllabusItem[] = BASE_SYLLABUS.map((item) => ({
+  ...item,
+  learningGoals: [
+    `Comprender los conceptos esenciales de ${item.title.toLowerCase()}.`,
+    'Resolver y verificar ejercicios declarando dominio, hipótesis y estrategia.',
+  ],
+  curricularTopics: item.topics,
+  extensionTopics: EXTENSION_TOPICS[item.week] ?? [],
+  hypothesisNotes: HYPOTHESIS_NOTES[item.week] ?? [
+    'Declarar el dominio y comprobar las hipótesis de cada resultado antes de aplicarlo.',
+  ],
+  financialDisclaimer: FINANCIAL_DISCLAIMER,
+}));

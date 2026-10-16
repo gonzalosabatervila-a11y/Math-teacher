@@ -116,7 +116,7 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
                       </span>
                       {item.title}
                     </span>
-                    <span className="text-[10px] text-stone-500 uppercase">{item.block}</span>
+                    <span className="text-[10px] text-stone-500 uppercase">Curricular · {item.block}</span>
                   </div>
 
                   <ul className="text-[11px] text-stone-400 space-y-0.5 pl-2 border-l border-stone-800 my-1.5">
@@ -127,9 +127,15 @@ export const SyllabusSelector: React.FC<SyllabusSelectorProps> = ({
                     ))}
                   </ul>
 
+                  {item.extensionTopics.length > 0 && (
+                    <div className="text-[10px] text-cyan-300/90">
+                      Ampliación: {item.extensionTopics.join(' · ')}
+                    </div>
+                  )}
+
                   <div className="mt-1 pt-1 border-t border-stone-800/80 flex items-center gap-1 text-[10px] text-amber-400/90">
                     <TrendingUp className="w-3 h-3 text-amber-500 flex-shrink-0" />
-                    <span className="truncate">{item.financialTransfer}</span>
+                    <span className="truncate">Transferencia conceptual: {item.financialTransfer}</span>
                   </div>
                 </button>
               );
