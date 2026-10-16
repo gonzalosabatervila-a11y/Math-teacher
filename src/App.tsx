@@ -17,8 +17,6 @@ import {
   Award,
   ChevronDown,
   Info,
-  Download,
-  Github,
 } from 'lucide-react';
 import { ChatMessage, SessionPhase, PostmortemData, SyllabusItem } from './types/tutor';
 import { SESSION_PHASES, PROTOCOL_STEPS, SYLLABUS } from './data/syllabus';
@@ -27,7 +25,6 @@ import { SessionTimeline } from './components/SessionTimeline';
 import { ClassroomFeed } from './components/ClassroomFeed';
 import { SyllabusSelector } from './components/SyllabusSelector';
 import { PostmortemModal } from './components/PostmortemModal';
-import { ExportModal } from './components/ExportModal';
 import { MobileCamView } from './components/MobileCamView';
 import { speakInSpanish, stopSpeaking, SpeechSettings } from './utils/speech';
 
@@ -91,7 +88,6 @@ export default function App() {
   // Modals & Panels
   const [isSyllabusOpen, setIsSyllabusOpen] = useState(false);
   const [isPostmortemOpen, setIsPostmortemOpen] = useState(false);
-  const [isExportOpen, setIsExportOpen] = useState(false);
 
   // Speech settings
   const [speechSettings, setSpeechSettings] = useState<SpeechSettings>({
@@ -308,16 +304,6 @@ export default function App() {
 
         {/* Action Controls */}
         <div className="flex items-center space-x-2">
-          {/* Download & GitHub Button */}
-          <button
-            onClick={() => setIsExportOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-750 text-stone-200 border border-stone-700 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm"
-            title="Descargar código o exportar a GitHub"
-          >
-            <Download className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Descargar / GitHub</span>
-          </button>
-
           {/* Postmortem Button */}
           <button
             onClick={() => setIsPostmortemOpen(true)}
@@ -402,11 +388,6 @@ export default function App() {
         onSpeakSummary={(text: string) => speakInSpanish(text, speechSettings)}
       />
 
-      {/* Export & GitHub Modal */}
-      <ExportModal
-        isOpen={isExportOpen}
-        onClose={() => setIsExportOpen(false)}
-      />
     </div>
   );
 }

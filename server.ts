@@ -3,73 +3,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
-import * as _archiver from 'archiver';
-const archiver = (_archiver as any).default || _archiver;
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '25mb' }));
-
-// Route to download the complete source code as a clean ZIP archive
-app.get('/api/download-zip', (_req, res) => {
-  res.attachment('profesor-matematicas-preuniversitarias.zip');
-  const archive = archiver('zip', { zlib: { level: 9 } });
-
-  archive.on('error', (err: any) => {
-    console.error('Error generating ZIP:', err);
-    res.status(500).send({ error: err.message });
-  });
-
-  archive.pipe(res);
-
-  // Archive project files, excluding node_modules, dist, and .git
-  archive.glob('**/*', {
-    cwd: __dirname,
-    ignore: ['node_modules/**', 'dist/**', '.git/**', '*.zip', '*.tar.gz'],
-    dot: true,
-  });
-
-  archive.finalize();
-});
-
-// Push directly to a GitHub repository from the UI
-app.post('/api/github/push', async (req, res) => {
-  const { repoUrl, token, branch = 'main' } = req.body;
-  if (!repoUrl) {
-    return res.status(400).json({ error: 'Debes proporcionar la URL de tu repositorio de GitHub' });
-  }
-
-  try {
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
-
-    let pushUrl = repoUrl.trim();
-    if (token && pushUrl.startsWith('https://')) {
-      pushUrl = pushUrl.replace('https://', `https://${token.trim()}@`);
-    }
-
-    await execAsync('git config user.name "Gonzalo Sabater"');
-    await execAsync('git config user.email "gonzalosabatervila@gmail.com"');
-    await execAsync('git add .');
-    await execAsync('git commit -m "Update math classroom codebase" || true');
-    await execAsync('git branch -M main');
-    await execAsync('git remote remove origin || true');
-    await execAsync(`git remote add origin "${pushUrl}"`);
-    const { stdout, stderr } = await execAsync(`git push -u origin ${branch}`);
-
-    res.json({ success: true, message: '¡Repositorio subido con éxito a GitHub!', output: stdout || stderr });
-  } catch (error: any) {
-    console.error('Error pushing to GitHub:', error);
-    res.status(500).json({ error: error.message || 'Error al ejecutar git push' });
-  }
-});
 
 // Initialize GoogleGenAI SDK as per gemini-api guidelines
 const ai = new GoogleGenAI({
@@ -349,6 +292,10 @@ app.get('/api/cam-session/:id/latest', (req, res) => {
   });
 });
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada' });
+});
+
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -370,4 +317,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
