@@ -1,0 +1,6 @@
+{
+  "name": "Profesor Particular Matemáticas Preuniversitarias",
+  "description": "Profesor particular interactivo en tiempo real con visión de papel, audio oral, protocolo de resolución en 7 pasos y transferencia financiera.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
