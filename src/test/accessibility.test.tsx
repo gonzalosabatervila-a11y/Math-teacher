@@ -10,8 +10,8 @@ describe('classroom accessibility', () => {
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /nueva sesión/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /plan 13 semanas/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /empezar sesión/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /saltar al contenido/i })).toHaveAttribute('href', '#main-content');
 
     const results = await axe.run(container, { resultTypes: ['violations'] });
     const serious = results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact ?? ''));
