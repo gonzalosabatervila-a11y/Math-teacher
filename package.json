@@ -9,7 +9,9 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -27,6 +29,9 @@
     "vite": "^8.3.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/archiver": "^8.0.0",
     "@types/express": "^4.17.21",
     "@types/katex": "^0.16.8",
@@ -34,10 +39,16 @@
     "@types/qrcode.react": "^3.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/supertest": "^7.2.1",
+    "@vitest/coverage-v8": "^5.0.5",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "axe-core": "^4.14.0",
+    "esbuild": "^0.28.0",
+    "jsdom": "^29.1.1",
+    "supertest": "^7.3.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }
