@@ -28,6 +28,11 @@ interface CameraPaperViewProps {
 }
 
 type SourceType = 'mobile' | 'webcam';
+interface CameraAccess {
+  sessionId: string;
+  writeCredential: string;
+  readCredential: string;
+}
 
 export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   onCaptureSnapshot,
@@ -37,10 +42,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
   const [sourceType, setSourceType] = useState<SourceType>('mobile');
 
   // Mobile pairing state
-  const [sessionId, setSessionId] = useState<string>(() => {
-    const saved = localStorage.getItem('math_cam_session_id');
-    return saved || Math.random().toString(36).substring(2, 8).toUpperCase();
-  });
+  const [cameraAccess, setCameraAccess] = useState<CameraAccess | null>(null);
   const [mobileConnected, setMobileConnected] = useState(false);
   const [mobileFrame, setMobileFrame] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -60,15 +62,16 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sseRef = useRef<EventSource | null>(null);
+  const onCaptureSnapshotRef = useRef(onCaptureSnapshot);
 
-  // Save session ID
   useEffect(() => {
-    localStorage.setItem('math_cam_session_id', sessionId);
-  }, [sessionId]);
+    onCaptureSnapshotRef.current = onCaptureSnapshot;
+  }, [onCaptureSnapshot]);
 
   // Construct mobile URL
   const mobileUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/?cam=${sessionId}`
+    && cameraAccess
+    ? `${window.location.origin}/?cam=${encodeURIComponent(cameraAccess.sessionId)}&key=${encodeURIComponent(cameraAccess.writeCredential)}`
     : '';
 
   // Initialize session on server and connect SSE stream
@@ -77,18 +80,21 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
     const initAndListen = async () => {
       try {
-        await fetch('/api/cam-session/init', {
+        const response = await fetch('/api/camera/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
         });
+        if (!response.ok) throw new Error(`Camera session failed: ${response.status}`);
+        const access = await response.json() as CameraAccess;
+        if (!isMounted) return;
+        setCameraAccess(access);
 
         // Close previous SSE if any
         if (sseRef.current) {
           sseRef.current.close();
         }
 
-        const sse = new EventSource(`/api/cam-session/${sessionId}/stream`);
+        const sse = new EventSource(`/api/camera/sessions/${access.sessionId}/stream?credential=${encodeURIComponent(access.readCredential)}`);
         sseRef.current = sse;
 
         sse.onmessage = (event) => {
@@ -97,12 +103,10 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
             const data = JSON.parse(event.data);
             if (data.frame) {
               setMobileFrame(data.frame);
-              setLastFrameTime(data.timestamp || Date.now());
-              onCaptureSnapshot(data.frame);
+              setLastFrameTime(data.lastFrameTime || Date.now());
+              onCaptureSnapshotRef.current(data.frame);
             }
-            if (data.mobileConnected !== undefined) {
-              setMobileConnected(Boolean(data.mobileConnected));
-            }
+            setMobileConnected(Boolean(data.lastFrameTime));
           } catch (e) {
             console.warn('Error parsing SSE cam event', e);
           }
@@ -124,7 +128,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
         sseRef.current.close();
       }
     };
-  }, [sessionId, onCaptureSnapshot]);
+  }, []);
 
   // WebCam setup
   const stopWebcam = useCallback(() => {
@@ -318,7 +322,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
                   </div>
 
                   <div className="flex justify-between items-center text-[10px] text-stone-400 font-mono">
-                    <span>Sesión: {sessionId}</span>
+                    <span>Sesión: {cameraAccess?.sessionId.slice(0, 8) ?? 'creando…'}</span>
                     <span>
                       {lastFrameTime
                         ? `Recibido: ${new Date(lastFrameTime).toLocaleTimeString()}`
@@ -341,7 +345,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
 
                 {/* QR Code */}
                 <div className="bg-white p-3 rounded-xl inline-block shadow-lg mx-auto border-4 border-stone-800">
-                  <QRCodeSVG value={mobileUrl} size={160} level="M" />
+                  <QRCodeSVG value={mobileUrl || window.location.origin} size={160} level="M" />
                 </div>
 
                 <div className="space-y-2">
@@ -357,7 +361,7 @@ export const CameraPaperView: React.FC<CameraPaperViewProps> = ({
                   </div>
 
                   <div className="text-[11px] text-stone-400">
-                    Código de sesión: <span className="font-bold text-amber-400">{sessionId}</span>
+                    Código de sesión: <span className="font-bold text-amber-400">{cameraAccess?.sessionId.slice(0, 8) ?? 'creando…'}</span>
                   </div>
                 </div>
 

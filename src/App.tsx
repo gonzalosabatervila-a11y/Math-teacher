@@ -39,9 +39,10 @@ export default function App() {
     (typeof window !== 'undefined' && window.location.pathname === '/cam'
       ? urlParams?.get('session') || 'DEFAULT'
       : null);
+  const mobileCamCredential = urlParams?.get('key');
 
   if (mobileCamSession) {
-    return <MobileCamView sessionId={mobileCamSession} />;
+    return <MobileCamView sessionId={mobileCamSession} writeCredential={mobileCamCredential ?? ''} />;
   }
 
   const [currentWeek, setCurrentWeek] = useState<number>(() => {

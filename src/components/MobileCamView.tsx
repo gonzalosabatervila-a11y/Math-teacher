@@ -14,9 +14,10 @@ import {
 
 interface MobileCamViewProps {
   sessionId: string;
+  writeCredential: string;
 }
 
-export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId }) => {
+export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId, writeCredential }) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -134,18 +135,22 @@ export const MobileCamView: React.FC<MobileCamViewProps> = ({ sessionId }) => {
       const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
 
       try {
-        await fetch(`/api/cam-session/${sessionId}/frame`, {
+        const response = await fetch(`/api/camera/sessions/${sessionId}/frames`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${writeCredential}`,
+          },
           body: JSON.stringify({ frame: dataUrl }),
         });
+        if (!response.ok) throw new Error(`Camera upload failed: ${response.status}`);
         setFramesSent((c) => c + 1);
         setLastSentTime(Date.now());
       } catch (err) {
         console.warn('Failed sending frame to server:', err);
       }
     },
-    [sessionId, contrastBoost]
+    [sessionId, writeCredential, contrastBoost]
   );
 
   // Set up live stream interval (every 1.5s for paper monitoring)

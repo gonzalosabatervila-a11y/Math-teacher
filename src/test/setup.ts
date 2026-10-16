@@ -80,7 +80,11 @@ Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   value: vi.fn(async () => ({
     ok: true,
-    json: async () => ({ sessionId: 'TESTSESSION' }),
+    json: async () => ({
+      sessionId: 'test-session-id',
+      writeCredential: 'test-write-credential',
+      readCredential: 'test-read-credential',
+    }),
   })),
 });
 
