@@ -80,8 +80,7 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const cameraCredential = (req: express.Request): string => {
     const header = req.get('authorization');
-    if (header?.startsWith('Bearer ')) return header.slice(7);
-    return typeof req.query.credential === 'string' ? req.query.credential : '';
+    return header?.startsWith('Bearer ') ? header.slice(7) : '';
   };
 
   const parseFrame = (value: unknown): string => {

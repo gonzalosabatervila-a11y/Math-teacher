@@ -10,14 +10,13 @@ import { createDefaultPersonalState, type PersonalStateV2 } from './state/person
 import { PersonalStateRepository } from './state/personal-state-repository';
 import { usePersonalSession } from './hooks/usePersonalSession';
 import { startSession } from './session/session-controller';
+import { consumePairingFragment } from './camera/pairing';
 
 type Confirmation = 'new' | 'import' | 'reset' | null;
 
 export default function App() {
-  const params = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search);
-  const mobileCamSession = params?.get('cam') || (typeof window !== 'undefined' && window.location.pathname === '/cam' ? params?.get('session') || 'DEFAULT' : null);
-  const mobileCamCredential = params?.get('key');
-  if (mobileCamSession) return <MobileCamView sessionId={mobileCamSession} writeCredential={mobileCamCredential ?? ''} />;
+  const [mobilePairing] = useState(() => typeof window === 'undefined' ? null : consumePairingFragment(window.location, window.history));
+  if (mobilePairing) return <MobileCamView sessionId={mobilePairing.sessionId} writeCredential={mobilePairing.writeCredential} />;
   return <PersonalApp />;
 }
 
