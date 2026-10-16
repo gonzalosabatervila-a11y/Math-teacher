@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage } from '../types/tutor';
 import { MathView } from './MathView';
+import { TutorResponseMeta } from './TutorResponseMeta';
 import { speakInSpanish, stopSpeaking, SpeechSettings } from '../utils/speech';
 
 interface ClassroomFeedProps {
@@ -243,6 +244,7 @@ export const ClassroomFeed: React.FC<ClassroomFeedProps> = ({
 
                 {/* Math & text content */}
                 <MathView content={msg.content} />
+                {isProf && <TutorResponseMeta mode={msg.tutorMode} checks={msg.tutorChecks} uncertainty={msg.tutorUncertainty} />}
 
                 {/* Bottom row: timestamp and audio play button */}
                 <div className="flex items-center justify-between gap-3 mt-1.5 pt-1 border-t border-white/10 text-[10px] text-stone-400">

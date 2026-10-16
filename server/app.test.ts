@@ -29,6 +29,12 @@ const valid = {
 };
 
 describe('createApp tutor endpoint', () => {
+  it('returns a stable structured tutor reply', async () => {
+    const app = createApp({ generate: vi.fn().mockResolvedValue(JSON.stringify({ message: '¿Cuál es el dominio?', mode: 'question', checks: ['Escribe la restricción'] })) });
+    const response = await invoke(app, valid);
+    expect(response).toMatchObject({ status: 200, json: { reply: { message: '¿Cuál es el dominio?', mode: 'question', checks: ['Escribe la restricción'] } } });
+  });
+
   it('exposes a minimal health check without leaking configuration', async () => {
     const app = createApp({ generate: vi.fn() });
     const request = httpMocks.createRequest({ method: 'GET', url: '/api/health' });

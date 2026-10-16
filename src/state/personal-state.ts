@@ -87,6 +87,9 @@ function cleanMessage(value: unknown): ChatMessage | null {
     (message.protocolStep !== undefined && (!Number.isInteger(message.protocolStep) || Number(message.protocolStep) < 1 || Number(message.protocolStep) > 7)) ||
     (message.isSpoken !== undefined && typeof message.isSpoken !== 'boolean')
   ) return null;
+  const tutorModes = ['question', 'hint', 'verification', 'solution'];
+  const tutorChecks = message.tutorChecks === undefined ? undefined : textList(message.tutorChecks, 5, 300);
+  if ((message.tutorMode !== undefined && !tutorModes.includes(String(message.tutorMode))) || (message.tutorChecks !== undefined && !tutorChecks) || (message.tutorUncertainty !== undefined && !boundedString(message.tutorUncertainty, 500))) return null;
   return {
     id: message.id,
     role: message.role,
@@ -94,6 +97,9 @@ function cleanMessage(value: unknown): ChatMessage | null {
     timestamp: message.timestamp,
     ...(message.protocolStep === undefined ? {} : { protocolStep: Number(message.protocolStep) }),
     ...(message.isSpoken === undefined ? {} : { isSpoken: message.isSpoken }),
+    ...(message.tutorMode === undefined ? {} : { tutorMode: message.tutorMode as ChatMessage['tutorMode'] }),
+    ...(tutorChecks ? { tutorChecks } : {}),
+    ...(message.tutorUncertainty === undefined ? {} : { tutorUncertainty: message.tutorUncertainty }),
   };
 }
 

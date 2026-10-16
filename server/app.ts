@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { publicError } from './errors';
 import { CameraSessionError, CameraSessionStore } from './camera-session-store';
 import { buildTutorContents, SYSTEM_INSTRUCTION, type TutorContent } from './tutor';
+import { parseTutorReply } from './tutor-response';
 import { parseTutorRequest, RequestValidationError } from './validation';
 
 export interface AppDependencies {
@@ -60,8 +61,8 @@ export function createApp(dependencies: AppDependencies): Express {
 
     try {
       const tutorRequest = parseTutorRequest(req.body);
-      const reply = await generate!(buildTutorContents(tutorRequest), SYSTEM_INSTRUCTION, model);
-      return res.json({ reply });
+      const providerText = await generate!(buildTutorContents(tutorRequest), SYSTEM_INSTRUCTION, model);
+      return res.json({ reply: parseTutorReply(providerText) });
     } catch (error) {
       if (error instanceof RequestValidationError) {
         const status = error.code === 'IMAGE_TOO_LARGE' ? 413 : 400;
