@@ -19,7 +19,7 @@ import {
   Info,
 } from 'lucide-react';
 import { ChatMessage, SessionPhase, PostmortemData, SyllabusItem } from './types/tutor';
-import { SESSION_PHASES, PROTOCOL_STEPS, SYLLABUS } from './data/syllabus';
+import { SESSION_PHASES, SYLLABUS } from './data/syllabus';
 import { CameraPaperView } from './components/CameraPaperView';
 import { SessionTimeline } from './components/SessionTimeline';
 import { ClassroomFeed } from './components/ClassroomFeed';
@@ -164,9 +164,6 @@ export default function App() {
 
     try {
       const activeTopic = SYLLABUS.find((s) => s.week === currentWeek)?.title || 'General';
-      const activeProtocol =
-        PROTOCOL_STEPS.find((s) => s.step === activeProtocolStep)?.name || 'Comprender';
-
       const res = await fetch('/api/tutor/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -182,7 +179,7 @@ export default function App() {
             phase: currentPhase.name,
             elapsedMinutes: Math.floor(elapsedSeconds / 60),
             topic: activeTopic,
-            protocolStep: activeProtocol,
+            protocolStep: activeProtocolStep,
           },
         }),
       });
